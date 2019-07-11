@@ -1,0 +1,16 @@
+{
+  "name": "aws-whooing-attend",
+  "version": "5.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node -e \"require('./index.js').handler({key1: 'value1', key2: 'value2', key3: 'value3'})\""
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "config": "^3.1.0",
+    "request": "^2.88.0",
+    "request-promise": "^4.2.4"
+  }
+}
