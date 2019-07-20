@@ -52,6 +52,7 @@ var requestCaptcha = function (result, callback) {
         result.body = body;
 
         console.log("Parsing Captcha");
+        console.log(body);
         captchaId = body && body.data && body.data.captchaId;
         if (captchaId) {
             callback(err, result);
@@ -76,6 +77,7 @@ var requestSalt = function (result, callback) {
         result.body = body;
 
         console.log("Parsing Salt");
+        console.log(body);
         saltValue = body && body.data && body.data.salt;
         if (saltValue) {
             callback(err, result);
@@ -114,6 +116,7 @@ var requestLoginPage = function (result, callback) {
         result.body = body;
 
         console.log("Parsing Login Result");
+        console.log(body);
         loginToken = body && body.data && body.data.loginToken;
         if (loginToken) {
             callback(err, result);
