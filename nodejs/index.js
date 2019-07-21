@@ -34,11 +34,41 @@ var start = function (callback) {
         data: {
             items: []
         },
-        message: ""
+        message: "",
+        loggedIn: false,
+        retryCount: 0,
     });
 }
 
+var requestLoginPage = function (result, callback) {
+    if (result.loggedIn) {
+        callback(null, result);
+        return;
+    }
+
+    var option = {
+        uri: 'https://front.wemakeprice.com/user/login',
+        method: 'GET',
+        qs: {
+        }
+    };
+
+    req(option, function (err, response, body) {
+        result.response = response;
+        result.body = body;
+
+        result.retryCount++;
+        console.log(`Request Login Page trying: ${result.retryCount}`);
+        callback(err, result);
+    });
+};
+
 var requestCaptcha = function (result, callback) {
+    if (result.loggedIn) {
+        callback(null, result);
+        return;
+    }
+
     var option = {
         uri: 'https://front.wemakeprice.com/api/user/login/getCaptchaId.json',
         method: 'GET',
@@ -63,6 +93,11 @@ var requestCaptcha = function (result, callback) {
 };
 
 var requestSalt = function (result, callback) {
+    if (result.loggedIn) {
+        callback(null, result);
+        return;
+    }
+
     var option = {
         uri: 'https://front.wemakeprice.com/api/user/login/salt.json',
         method: 'GET',
@@ -87,7 +122,12 @@ var requestSalt = function (result, callback) {
     });
 };
 
-var requestLoginPage = function (result, callback) {
+var requestLoginProcess = function (result, callback) {
+    if (result.loggedIn) {
+        callback(null, result);
+        return;
+    }
+
     var authConfig = config.get('auth');
 
     var lowerCasePW = authConfig.pw.toLowerCase();
@@ -119,14 +159,19 @@ var requestLoginPage = function (result, callback) {
         console.log(body);
         loginToken = body && body.data && body.data.loginToken;
         if (loginToken) {
+            result.loggedIn = true;
             callback(err, result);
         } else {
-            callback("loginToken not found!", result);
+            if (result.retryCount > 3) {
+                callback("loginToken not found!", result);
+            } else {
+                callback(err, result);
+            }
         }
     });
 };
 
-var requestMainPage = function (result, callback) {
+var requestLoginCheck = function (result, callback) {
     var option = {
         uri: 'https://front.wemakeprice.com/main',
         method: 'GET',
@@ -280,7 +325,6 @@ var makeReport = function (result, callback) {
     console.log("Making Report");
     docClient.query(queryParams, (err, res) => {
         if (!err) {
-            console.log(JSON.stringify(res));
             if (res.Items.length > 0 && res.Items[0].data) {
                 var saved = res.Items[0].data;
                 if (saved.couponCount !== result.data.couponCount) {
@@ -293,7 +337,6 @@ var makeReport = function (result, callback) {
                             return f;
                         } else {
                             if (curr.url === value.url) {
-                                console.log(`Found ${value.title}`);
                                 if (value.lowestPrice < curr.lowestPrice ) {
                                     console.log(`New lowest price ${value.title} => ${value.lowestPrice}`);
                                     result.message += `[최저가 갱신]\n품명: ${value.title}\nURL: ${value.url}\n가격: ${value.lowestPrice}\n\n`;
@@ -364,10 +407,23 @@ exports.handler = function (event, context, callback) {
 
     async.waterfall([
         start,
-        requestCaptcha,
-        requestSalt,
+
         requestLoginPage,
-        requestMainPage,
+        requestSalt,
+        requestCaptcha,
+        requestLoginProcess,
+
+        requestLoginPage,
+        requestSalt,
+        requestCaptcha,
+        requestLoginProcess,
+
+        requestLoginPage,
+        requestSalt,
+        requestCaptcha,
+        requestLoginProcess,
+
+        requestLoginCheck,
         requestListPage,
         function (result, callback) {
             async.eachLimit(result.data.items, 5, processItem, function (err) {
