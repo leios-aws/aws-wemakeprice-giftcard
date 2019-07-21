@@ -158,9 +158,9 @@ var makeReport = function (result, callback) {
                             return f;
                         } else {
                             if (curr.url === value.url) {
-                                if (value.lowestPrice < curr.lowestPrice ) {
+                                if (value.lowestPrice !== curr.lowestPrice ) {
                                     console.log(`New lowest price ${value.title} => ${value.lowestPrice}`);
-                                    result.message += `[최저가 갱신]\n품명: ${value.title}\nURL: ${value.url}\n가격: ${value.lowestPrice}\n\n`;
+                                    result.message += `[가격 변동]\n품명: ${value.title}\nURL: ${value.url}\n가격: ${value.price}\n최저가: ${curr.lowestPrice} => ${value.lowestPrice}\n\n`;
                                 }
                                 return value;
                             }
@@ -168,7 +168,7 @@ var makeReport = function (result, callback) {
                     }, null);
                     if (!found) {
                         console.log(`New item ${value.title}`);
-                        result.message += `[신규 상품 등록]\n품명: ${value.title}\nURL: ${value.url}\n가격: ${value.lowestPrice}\n\n`;
+                        result.message += `[신규 상품 등록]\n품명: ${value.title}\nURL: ${value.url}\n가격: ${value.price}\n최저가: ${value.lowestPrice}\n\n`;
                     }
                 });
             }
