@@ -7,9 +7,9 @@ const AWS = require('aws-sdk');
 AWS.config.update({
     region: 'ap-northeast-2',
     endpoint: "http://dynamodb.ap-northeast-2.amazonaws.com"
-})
+});
 
-const dynamodb = new AWS.DynamoDB();
+//const dynamodb = new AWS.DynamoDB();
 const docClient = new AWS.DynamoDB.DocumentClient();
 
 var req = request.defaults({
@@ -35,17 +35,10 @@ var start = function (callback) {
             items: []
         },
         message: "",
-        loggedIn: false,
-        retryCount: 0,
     });
-}
+};
 
 var requestLoginPage = function (result, callback) {
-    if (result.loggedIn) {
-        callback(null, result);
-        return;
-    }
-
     var option = {
         uri: 'https://front.wemakeprice.com/user/login',
         method: 'GET',
@@ -57,23 +50,22 @@ var requestLoginPage = function (result, callback) {
         result.response = response;
         result.body = body;
 
-        result.retryCount++;
-        console.log(`Request Login Page trying: ${result.retryCount}`);
+        console.log(`Request Login Page`);
         callback(err, result);
     });
 };
 
 var requestCaptcha = function (result, callback) {
-    if (result.loggedIn) {
-        callback(null, result);
-        return;
-    }
-
     var option = {
         uri: 'https://front.wemakeprice.com/api/user/login/getCaptchaId.json',
         method: 'GET',
         json: true,
         qs: {
+        },
+        headers: {
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Content-Type': 'application/json',
+            'Referer': 'https://front.wemakeprice.com/user/login',
         }
     };
 
@@ -82,10 +74,12 @@ var requestCaptcha = function (result, callback) {
         result.body = body;
 
         console.log("Parsing Captcha");
-        console.log(body);
+        console.log(JSON.stringify(body, null, 2));
         captchaId = body && body.data && body.data.captchaId;
         if (captchaId) {
-            callback(err, result);
+            setTimeout(() => {
+                callback(err, result);
+            }, 1000);
         } else {
             callback("captchaId not found!", result);
         }
@@ -93,17 +87,17 @@ var requestCaptcha = function (result, callback) {
 };
 
 var requestSalt = function (result, callback) {
-    if (result.loggedIn) {
-        callback(null, result);
-        return;
-    }
-
     var option = {
         uri: 'https://front.wemakeprice.com/api/user/login/salt.json',
         method: 'GET',
         json: true,
         qs: {
             _: Date.now()
+        },
+        headers: {
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Content-Type': 'application/json',
+            'Referer': 'https://front.wemakeprice.com/user/login',
         }
     };
 
@@ -112,7 +106,7 @@ var requestSalt = function (result, callback) {
         result.body = body;
 
         console.log("Parsing Salt");
-        console.log(body);
+        console.log(JSON.stringify(body, null, 2));
         saltValue = body && body.data && body.data.salt;
         if (saltValue) {
             callback(err, result);
@@ -123,11 +117,6 @@ var requestSalt = function (result, callback) {
 };
 
 var requestLoginProcess = function (result, callback) {
-    if (result.loggedIn) {
-        callback(null, result);
-        return;
-    }
-
     var authConfig = config.get('auth');
 
     var lowerCasePW = authConfig.pw.toLowerCase();
@@ -147,7 +136,8 @@ var requestLoginProcess = function (result, callback) {
         },
         headers: {
             'Accept': 'application/json, text/javascript, */*; q=0.01',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Referer': 'https://front.wemakeprice.com/user/login',
         }
     };
 
@@ -156,17 +146,12 @@ var requestLoginProcess = function (result, callback) {
         result.body = body;
 
         console.log("Parsing Login Result");
-        console.log(body);
+        console.log(JSON.stringify(body, null, 2));
         loginToken = body && body.data && body.data.loginToken;
         if (loginToken) {
-            result.loggedIn = true;
             callback(err, result);
         } else {
-            if (result.retryCount > 3) {
-                callback("loginToken not found!", result);
-            } else {
-                callback(err, result);
-            }
+            callback("loginToken not found!", result);
         }
     });
 };
@@ -239,7 +224,7 @@ var requestListPage = function (result, callback) {
                 } else {
                     item.url = 'http://www.wemakeprice.com' + href;
                 }
-                item.price = parseInt($("span.type03 > a > span.box_desc > span.txt_info > span.price > span.sale", element).text().replace(/,/g, ''));
+                item.price = parseInt($("span.type03 > a > span.box_desc > span.txt_info > span.price > span.sale", element).text().replace(/,/g, ''), 10);
                 item.title = $("span.type03 > a > span.box_desc > strong.tit_desc", element).text();
 
                 if (item.price < 88000) {
@@ -365,9 +350,9 @@ var saveReport = function (result, callback) {
             type: "상품권",
             data: result.data
         }
-    }
+    };
 
-    console.log("Saving Report", JSON.stringify(result.data, null, 2));
+    console.log("Saving Report");
     docClient.put(putParams, (err, res) => {
         if (!err) {
             console.log(JSON.stringify(res));
@@ -403,26 +388,12 @@ var notifyReport = function (result, callback) {
 };
 
 exports.handler = function (event, context, callback) {
-    var authConfig = config.get('auth');
-
     async.waterfall([
         start,
-
         requestLoginPage,
-        requestSalt,
         requestCaptcha,
-        requestLoginProcess,
-
-        requestLoginPage,
         requestSalt,
-        requestCaptcha,
         requestLoginProcess,
-
-        requestLoginPage,
-        requestSalt,
-        requestCaptcha,
-        requestLoginProcess,
-
         requestLoginCheck,
         requestListPage,
         function (result, callback) {
@@ -438,7 +409,7 @@ exports.handler = function (event, context, callback) {
         if (err) {
             console.log(err);
         }
-    })
+    });
 
     if (callback) {
         callback(null, 'Success');
