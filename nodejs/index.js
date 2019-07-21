@@ -32,9 +32,11 @@ var loginToken = '';
 var start = function (callback) {
     callback(null, {
         data: {
-            items: []
+            items: [],
+            couponCount: 0,
         },
         message: "",
+        loggedIn: false,
     });
 };
 
@@ -149,14 +151,22 @@ var requestLoginProcess = function (result, callback) {
         console.log(JSON.stringify(body, null, 2));
         loginToken = body && body.data && body.data.loginToken;
         if (loginToken) {
+            result.loggedIn = true;
             callback(err, result);
         } else {
-            callback("loginToken not found!", result);
+            result.loggedIn = false;
+            console.log("Login failed!");
+            callback(err, result);
         }
     });
 };
 
 var requestLoginCheck = function (result, callback) {
+    if (!result.loggedIn) {
+        callback(null, result);
+        return;
+    }
+
     var option = {
         uri: 'https://front.wemakeprice.com/main',
         method: 'GET',
@@ -170,7 +180,9 @@ var requestLoginCheck = function (result, callback) {
 
         console.log("Checking Login Result");
         if (!err && body.indexOf("_logOutBtn") < 0) {
-            callback("Login Fail!", result);
+            result.loggedIn = false;
+            console.log("Login failed!");
+            callback(err, result);
         } else {
             callback(err, result);
         }
@@ -178,6 +190,11 @@ var requestLoginCheck = function (result, callback) {
 };
 
 var requestCouponPage = function (result, callback) {
+    if (!result.loggedIn) {
+        callback(null, result);
+        return;
+    }
+
     var option = {
         uri: 'https://front.wemakeprice.com/mypage/coupon',
         method: 'GET',
@@ -395,13 +412,13 @@ exports.handler = function (event, context, callback) {
         requestSalt,
         requestLoginProcess,
         requestLoginCheck,
+        requestCouponPage,
         requestListPage,
         function (result, callback) {
             async.eachLimit(result.data.items, 5, processItem, function (err) {
                 callback(err, result);
             });
         },
-        requestCouponPage,
         makeReport,
         saveReport,
         notifyReport,
