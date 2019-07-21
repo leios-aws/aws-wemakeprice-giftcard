@@ -182,7 +182,8 @@ var saveReport = function (result, callback) {
         TableName: 'webdata',
         Item: {
             site: 'wemakeprice-giftcard',
-            timestamp: Date.now(),
+            timestamp: Math.floor(Date.now() / 1000),
+            ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
             data: result.data
         }
     };
