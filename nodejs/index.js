@@ -224,31 +224,89 @@ var processItem = function (item, callback) {
             var matches = body.match(/(var aCouponList = .*)/);
             if (matches && matches.length > 1) {
                 eval(matches[1]);
-                item.couponList = aCouponList;
+
+                item.couponList = aCouponList.map((value, index, array) => {
+                    var timestamp = Date.now() / 1000;
+                    if (value.publish_start_time < timestamp && timestamp <= value.publish_end_time && value.usable_time < timestamp && timestamp <= value.expire_time) {
+                        return {
+                            coupon_value: value.coupon_value,
+                            max_discount_price: value.max_discount_price,
+                            min_payment_amount: value.min_payment_amount,
+                            //publish_start_time: value.publish_start_time,
+                            //publish_end_time: value.publish_end_time,
+                            //usable_time: value.usable_time,
+                            //expire_time: value.expire_time,
+                        };
+                    } else {
+                        return null;
+                    }
+                });
             } else {
                 console.log("Pattern not found!");
             }
         }
+        item.lowestPrice = item.couponList.reduce((prev, curr, index) => {
+            var curr_price = item.price;
+            for (var i = 0; i < 20; i++) {
+                if (curr.min_payment_amount < (item.price * i)) {
+                    curr_price = Math.floor(((item.price * i) - curr.coupon_value) / i);
+                    break;
+                }
+            }
+            if (prev > curr_price) {
+                return curr_price;
+            } else {
+                return prev;
+            }
+        }, item.price);
         callback(err);
     });
 };
 
 var makeReport = function (result, callback) {
-    var params = {
-        TableName: 'web-data',
-        Key: {
-            'site': 'wemakeprice',
-            'type': '상품권'
+    var queryParams = {
+        TableName: 'webdata',
+        KeyConditionExpression: "#site = :site",
+        ScanIndexForward: false,
+        Limit: 1,
+        ExpressionAttributeNames: {
+            "#site": "site"
+        },
+        ExpressionAttributeValues: {
+            ":site": 'wemakeprice'
         }
-    }
+    };
 
-    docClient.get(params, (err, res) => {
+    console.log("Making Report");
+    docClient.query(queryParams, (err, res) => {
         if (!err) {
             console.log(JSON.stringify(res));
-            var saved = res.Item.data;
+            if (res.Items.length > 0 && res.Items[0].data) {
+                var saved = res.Items[0].data;
+                if (saved.couponCount !== result.data.couponCount) {
+                    result.message += `계정 쿠폰 갯수 변경: ${result.data.couponCount}\n`;
+                }
 
-            if (saved.couponCount !== result.data.couponCount) {
-                result.message += `계정 쿠폰 갯수 변경: ${result.data.couponCount}\n`;
+                result.data.items.forEach((value, index) => {
+                    var found = saved.items.reduce((f, curr) => {
+                        if (f) {
+                            return f;
+                        } else {
+                            if (curr.url === value.url) {
+                                console.log(`Found ${value.title}`);
+                                if (value.lowestPrice < curr.lowestPrice ) {
+                                    console.log(`New lowest price ${value.title} => ${value.lowestPrice}`);
+                                    result.message += `[최저가 갱신]\n품명: ${value.title}\nURL: ${value.url}\n가격: ${value.lowestPrice}\n\n`;
+                                }
+                                return value;
+                            }
+                        }
+                    }, null);
+                    if (!found) {
+                        console.log(`New item ${value.title}`);
+                        result.message += `[신규 상품 등록]\n품명: ${value.title}\nURL: ${value.url}\n가격: ${value.lowestPrice}\n\n`;
+                    }
+                });
             }
         }
         callback(err, result);
@@ -256,16 +314,18 @@ var makeReport = function (result, callback) {
 };
 
 var saveReport = function (result, callback) {
-    var params = {
-        TableName: 'web-data',
+    var putParams = {
+        TableName: 'webdata',
         Item: {
             site: 'wemakeprice',
+            timestamp: Date.now(),
             type: "상품권",
             data: result.data
         }
     }
 
-    docClient.put(params, (err, res) => {
+    console.log("Saving Report", JSON.stringify(result.data, null, 2));
+    docClient.put(putParams, (err, res) => {
         if (!err) {
             console.log(JSON.stringify(res));
         }
@@ -285,7 +345,7 @@ var notifyReport = function (result, callback) {
                 'text': result.message
             }
         };
-    
+
         req(option, function (err, response, body) {
             if (!err && (body && !body.ok)) {
                 console.log(body);
