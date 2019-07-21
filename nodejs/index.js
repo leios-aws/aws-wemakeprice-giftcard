@@ -152,6 +152,7 @@ var makeReport = function (result, callback) {
             if (res.Items.length > 0 && res.Items[0].data) {
                 var saved = res.Items[0].data;
                 result.data.items.forEach((value, index) => {
+                    console.log(`Checking item ${value.title}`);
                     var found = saved.items.reduce((f, curr) => {
                         if (f) {
                             return f;
