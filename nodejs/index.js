@@ -33,7 +33,6 @@ var start = function (callback) {
     callback(null, {
         data: {
             items: [],
-            couponCount: 0,
         },
         message: "",
         loggedIn: false,
@@ -152,10 +151,6 @@ var makeReport = function (result, callback) {
         if (!err) {
             if (res.Items.length > 0 && res.Items[0].data) {
                 var saved = res.Items[0].data;
-                if (saved.couponCount !== result.data.couponCount) {
-                    result.message += `계정 쿠폰 갯수 변경: ${result.data.couponCount}\n`;
-                }
-
                 result.data.items.forEach((value, index) => {
                     var found = saved.items.reduce((f, curr) => {
                         if (f) {
