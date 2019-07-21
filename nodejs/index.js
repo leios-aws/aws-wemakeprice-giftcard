@@ -40,183 +40,6 @@ var start = function (callback) {
     });
 };
 
-var requestLoginPage = function (result, callback) {
-    var option = {
-        uri: 'https://front.wemakeprice.com/user/login',
-        method: 'GET',
-        qs: {
-        }
-    };
-
-    req(option, function (err, response, body) {
-        result.response = response;
-        result.body = body;
-
-        console.log(`Request Login Page`);
-        callback(err, result);
-    });
-};
-
-var requestCaptcha = function (result, callback) {
-    var option = {
-        uri: 'https://front.wemakeprice.com/api/user/login/getCaptchaId.json',
-        method: 'GET',
-        json: true,
-        qs: {
-        },
-        headers: {
-            'Accept': 'application/json, text/javascript, */*; q=0.01',
-            'Content-Type': 'application/json',
-            'Referer': 'https://front.wemakeprice.com/user/login',
-        }
-    };
-
-    req(option, function (err, response, body) {
-        result.response = response;
-        result.body = body;
-
-        console.log("Parsing Captcha");
-        console.log(JSON.stringify(body, null, 2));
-        captchaId = body && body.data && body.data.captchaId;
-        if (captchaId) {
-            setTimeout(() => {
-                callback(err, result);
-            }, 1000);
-        } else {
-            callback("captchaId not found!", result);
-        }
-    });
-};
-
-var requestSalt = function (result, callback) {
-    var option = {
-        uri: 'https://front.wemakeprice.com/api/user/login/salt.json',
-        method: 'GET',
-        json: true,
-        qs: {
-            _: Date.now()
-        },
-        headers: {
-            'Accept': 'application/json, text/javascript, */*; q=0.01',
-            'Content-Type': 'application/json',
-            'Referer': 'https://front.wemakeprice.com/user/login',
-        }
-    };
-
-    req(option, function (err, response, body) {
-        result.response = response;
-        result.body = body;
-
-        console.log("Parsing Salt");
-        console.log(JSON.stringify(body, null, 2));
-        saltValue = body && body.data && body.data.salt;
-        if (saltValue) {
-            callback(err, result);
-        } else {
-            callback("saltValue not found!", result);
-        }
-    });
-};
-
-var requestLoginProcess = function (result, callback) {
-    var authConfig = config.get('auth');
-
-    var lowerCasePW = authConfig.pw.toLowerCase();
-    var loginSalts = saltValue.substr(1, 1) + saltValue.substr(4, 1) + saltValue.substr(8, 1) + saltValue.substr(12, 1);
-    var encryptValue = sha1(loginSalts + sha1(lowerCasePW)) + loginSalts;
-
-    var option = {
-        uri: 'https://front.wemakeprice.com/api/edge/login.json',
-        method: 'POST',
-        json: true,
-        body: {
-            captcha: "",
-            captchaId: captchaId,
-            selectionYn: "N",
-            userId: authConfig.id,
-            userPassword: encryptValue
-        },
-        headers: {
-            'Accept': 'application/json, text/javascript, */*; q=0.01',
-            'Content-Type': 'application/json',
-            'Referer': 'https://front.wemakeprice.com/user/login',
-        }
-    };
-
-    req(option, function (err, response, body) {
-        result.response = response;
-        result.body = body;
-
-        console.log("Parsing Login Result");
-        console.log(JSON.stringify(body, null, 2));
-        loginToken = body && body.data && body.data.loginToken;
-        if (loginToken) {
-            result.loggedIn = true;
-            callback(err, result);
-        } else {
-            result.loggedIn = false;
-            console.log("Login failed!");
-            callback(err, result);
-        }
-    });
-};
-
-var requestLoginCheck = function (result, callback) {
-    if (!result.loggedIn) {
-        callback(null, result);
-        return;
-    }
-
-    var option = {
-        uri: 'https://front.wemakeprice.com/main',
-        method: 'GET',
-        qs: {
-        }
-    };
-
-    req(option, function (err, response, body) {
-        result.response = response;
-        result.body = body;
-
-        console.log("Checking Login Result");
-        if (!err && body.indexOf("_logOutBtn") < 0) {
-            result.loggedIn = false;
-            console.log("Login failed!");
-            callback(err, result);
-        } else {
-            callback(err, result);
-        }
-    });
-};
-
-var requestCouponPage = function (result, callback) {
-    if (!result.loggedIn) {
-        callback(null, result);
-        return;
-    }
-
-    var option = {
-        uri: 'https://front.wemakeprice.com/mypage/coupon',
-        method: 'GET',
-        qs: {
-        }
-    };
-
-    req(option, function (err, response, body) {
-        result.response = response;
-        result.body = body;
-
-        console.log("Parsing Coupon Count");
-        if (!err) {
-            var $ = cheerio.load(body);
-            result.data.couponCount = $('div.my_detail_box.on > dl > dd:nth-child(6) > a > em').text();
-            console.log("Coupon Count:", result.data.couponCount);
-        }
-
-        callback(err, result);
-    });
-};
-
 var requestListPage = function (result, callback) {
     var option = {
         uri: 'http://www.wemakeprice.com/main/103900/103912',
@@ -320,7 +143,7 @@ var makeReport = function (result, callback) {
             "#site": "site"
         },
         ExpressionAttributeValues: {
-            ":site": 'wemakeprice'
+            ":site": 'wemakeprice-giftcard'
         }
     };
 
@@ -362,9 +185,8 @@ var saveReport = function (result, callback) {
     var putParams = {
         TableName: 'webdata',
         Item: {
-            site: 'wemakeprice',
+            site: 'wemakeprice-giftcard',
             timestamp: Date.now(),
-            type: "상품권",
             data: result.data
         }
     };
@@ -407,12 +229,6 @@ var notifyReport = function (result, callback) {
 exports.handler = function (event, context, callback) {
     async.waterfall([
         start,
-        requestLoginPage,
-        requestCaptcha,
-        requestSalt,
-        requestLoginProcess,
-        requestLoginCheck,
-        requestCouponPage,
         requestListPage,
         function (result, callback) {
             async.eachLimit(result.data.items, 5, processItem, function (err) {
