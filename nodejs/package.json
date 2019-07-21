@@ -1,6 +1,6 @@
 {
-  "name": "aws-whooing-attend",
-  "version": "5.0.0",
+  "name": "aws-wemakeprice",
+  "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -9,8 +9,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "config": "^3.1.0",
+    "async": "^3.1.0",
+    "aws-sdk": "^2.496.0",
+    "cheerio": "^1.0.0-rc.3",
+    "config": "^3.2.2",
     "request": "^2.88.0",
-    "request-promise": "^4.2.4"
+    "sha1": "^1.1.1"
   }
 }
