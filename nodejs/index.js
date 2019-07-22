@@ -41,8 +41,10 @@ var start = function (callback) {
 
 var requestListPage = function (result, callback) {
     var option = {
-        uri: 'http://www.wemakeprice.com/main/103900/103912',
+        //uri: 'http://www.wemakeprice.com/main/103900/103912',
+        uri: 'http://www.wemakeprice.com/main/get_deal_more/103900/103912',
         method: 'GET',
+        json: true,
         qs: {
         }
     };
@@ -53,8 +55,8 @@ var requestListPage = function (result, callback) {
 
         console.log("Parsing Item List");
         if (!err) {
-            var $ = cheerio.load(body);
-            result.data.items = $('ul.lst_shopping').children("li").map((index, element) => {
+            var $ = cheerio.load(body.html);
+            result.data.items = $('li').map((index, element) => {
                 var item = {};
 
                 var href = $("span.type03 > a", element).attr('href').split('?')[0];
@@ -70,6 +72,9 @@ var requestListPage = function (result, callback) {
                     return null;
                 }
                 if (item.price > 101000) {
+                    return null;
+                }
+                if (body.html.indexOf('btn_buy_end') > -1) {
                     return null;
                 }
                 return item;
