@@ -2,8 +2,9 @@ const request = require('request');
 const config = require('config');
 const cheerio = require('cheerio');
 const async = require('async');
-const sha1 = require('sha1');
 const AWS = require('aws-sdk');
+const path = require('path');
+
 AWS.config.update({
     region: 'ap-northeast-2',
     endpoint: "http://dynamodb.ap-northeast-2.amazonaws.com"
@@ -11,6 +12,8 @@ AWS.config.update({
 
 //const dynamodb = new AWS.DynamoDB();
 const docClient = new AWS.DynamoDB.DocumentClient();
+
+var now = Math.floor(Date.now() / 1000);
 
 var req = request.defaults({
     headers: {
@@ -63,7 +66,11 @@ var requestListPage = function (result, callback) {
                 if (href.startsWith('http')) {
                     item.url = href;
                 } else {
-                    item.url = 'http://www.wemakeprice.com' + href;
+                    if (href.endsWith('/103900/')) {
+                        item.url = 'http://www.wemakeprice.com' + href.replace(/\/103900\//g, '');
+                    } else {
+                        item.url = 'http://www.wemakeprice.com' + href;
+                    }
                 }
                 item.price = parseInt($("span.type03 > a > span.box_desc > span.txt_info > span.price > span.sale", element).text().replace(/,/g, ''), 10);
                 item.title = $("span.type03 > a > span.box_desc > strong.tit_desc", element).text();
@@ -100,7 +107,7 @@ var processItem = function (item, callback) {
                 eval(matches[1]);
 
                 item.couponList = aCouponList.map((value, index, array) => {
-                    var timestamp = Date.now() / 1000;
+                    var timestamp = now;
                     if (value.publish_start_time < timestamp && timestamp <= value.publish_end_time && value.usable_time < timestamp && timestamp <= value.expire_time) {
                         return {
                             coupon_value: value.coupon_value,
@@ -156,8 +163,9 @@ var makeReport = function (result, callback) {
         if (!err) {
             if (res.Items.length > 0 && res.Items[0].data) {
                 var saved = res.Items[0].data;
-                result.data.items.forEach((value, index) => {
-                    console.log(`Checking item ${value.title}`);
+                async.eachSeries(result.data.items, (value, inner_callback) => {
+                    console.log(`Checking item ${value.title} : ${value.url}`);
+                    console.log(path.basename(value.url));
                     var found = saved.items.reduce((f, curr) => {
                         if (f) {
                             return f;
@@ -175,6 +183,8 @@ var makeReport = function (result, callback) {
                         console.log(`New item ${value.title}`);
                         result.message += `[신규 상품 등록]\n품명: ${value.title}\nURL: ${value.url}\n가격: ${value.price}\n최저가: ${value.lowestPrice}\n\n`;
                     }
+                    inner_callback(null);
+                }, function(err) {
                 });
             }
         }
@@ -187,8 +197,8 @@ var saveReport = function (result, callback) {
         TableName: 'webdata',
         Item: {
             site: 'wemakeprice-giftcard',
-            timestamp: Math.floor(Date.now() / 1000),
-            ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+            timestamp: now,
+            ttl: now + 30 * 24 * 60 * 60,
             data: result.data
         }
     };
