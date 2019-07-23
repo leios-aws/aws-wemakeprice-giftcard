@@ -144,10 +144,110 @@ var parseItem = function (item, callback) {
     });
 };
 
+var getProductId = function (item) {
+    //return `wemakeprice-${path.basename(item.url)}`;
+    if (item.title.indexOf("컬쳐랜드") > -1) {
+        return "컬쳐랜드";
+    }
+    if (item.title.indexOf("해피머니") > -1) {
+        return "해피머니";
+    }
+    if (item.title.indexOf("도서문화상품권") > -1) {
+        return "도서문화상품권";
+    }
+    if (item.title.indexOf("롯데") > -1) {
+        return "롯데";
+    }
+    if (item.title.indexOf("신세계") > -1) {
+        return "신세계";
+    }
+};
+
+var updateStatistics = function (item, callback) {
+    var productId = getProductId(item);
+    var lowPrices = {
+        _007d_price: item.price,
+        _030d_price: item.price,
+        _365d_price: item.price,
+    };
+
+    if (productId.length === 0) {
+        callback(lowPrices);
+        return;
+    }
+
+    var getParams = {
+        TableName: 'webdata',
+        Key: {
+            site: productId,
+            timestamp: 0,
+        }
+    };
+
+    console.log(`Get Statistics for ${productId}`);
+    docClient.get(getParams, (err, res) => {
+        var data = [];
+        if (!err) {
+            console.log(JSON.stringify(res));
+            if (res && res.Item && res.Item.data) {
+                data = res.Item.data;
+            }
+        }
+        data.push({ ts: now, price: item.lowestPrice });
+
+        lowPrices = data.reduce((prev, curr) => {
+            // 7일 이내 데이터이면
+            if (now < curr.ts + 7 * 24 * 60 * 60) {
+                if (curr.price < prev._007d_price) {
+                    prev._007d_price = curr.price;
+                }
+            }
+            // 30일 이내 데이터이면
+            if (now < curr.ts + 30 * 24 * 60 * 60) {
+                if (curr.price < prev._030d_price) {
+                    prev._030d_price = curr.price;
+                }
+            }
+            // 1년 이내 데이터이면
+            if (now < curr.ts + 365 * 24 * 60 * 60) {
+                if (curr.price < prev._365d_price) {
+                    prev._365d_price = curr.price;
+                }
+            }
+            return prev;
+        }, lowPrices);
+
+        data = data.map((d) => {
+            // 1년 이내 데이터이면
+            if (now < d.ts + 365 * 24 * 60 * 60) {
+                return d;
+            }
+        });
+
+        var putParams = {
+            TableName: 'webdata',
+            Item: {
+                site: productId,
+                timestamp: 0,
+                ttl: now + 30 * 24 * 60 * 60,
+                data: data
+            }
+        };
+
+        console.log("Updating Statistics");
+        docClient.put(putParams, (err, res) => {
+            if (!err) {
+                console.log(JSON.stringify(res));
+            }
+            callback(lowPrices);
+        });
+    });
+};
+
 var processItem = function (result, saved, item, callback) {
     console.log(`Checking item ${item.title} : ${item.url}`);
 
-    var productId = `wemakeprice-${path.basename(item.url)}`;
+    var productId = getProductId(item);
     var found = saved.items.reduce((f, curr) => {
         if (f) {
             return f;
@@ -160,93 +260,17 @@ var processItem = function (result, saved, item, callback) {
 
     if (!found) {
         console.log(`New item ${item.title}`);
-        result.message += `[신규 상품 등록]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n\n`;
-        var putParams = {
-            TableName: 'webdata',
-            Item: {
-                site: productId,
-                timestamp: 0,
-                ttl: now + 30 * 24 * 60 * 60,
-                data: [
-                    { ts: now, price: item.lowestPrice }
-                ]
-            }
-        };
-
-        console.log("Creating Statistics");
-        docClient.put(putParams, (err, res) => {
-            if (!err) {
-                console.log(JSON.stringify(res));
-            }
+        updateStatistics(item, (lowPrices) => {
+            result.message += `[신규 상품 등록]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n\n`;
             callback(null);
         });
     } else {
         if (item.lowestPrice !== found.lowestPrice) {
             console.log(`New lowest price ${item.title} => ${item.lowestPrice}`);
-
-            var getParams = {
-                TableName: 'webdata',
-                Key: {
-                    site: productId,
-                    timestamp: 0,
-                }
-            };
-
-            console.log("Get Statistics");
-            docClient.get(getParams, (err, res) => {
-                var data = [];
-                if (!err) {
-                    console.log(JSON.stringify(res));
-                    if (res && res.Item && res.Item.data) {
-                        data = res.Item.data;
-                    }
-                }
-                data.push({ ts: now, price: item.lowestPrice });
-
-                var lowPrices = data.reduce((prev, curr) => {
-                    if (now < curr.ts + 7 * 24 * 60 * 60) {
-                        if (curr.price < prev._007d_price) {
-                            prev._007d_price = curr.price;
-                        }
-                    }
-                    if (now < curr.ts + 30 * 24 * 60 * 60) {
-                        if (curr.price < prev._030d_price) {
-                            prev._030d_price = curr.price;
-                        }
-                    }
-                    if (now < curr.ts + 365 * 24 * 60 * 60) {
-                        if (curr.price < prev._365d_price) {
-                            prev._365d_price = curr.price;
-                        }
-                    }
-                    return prev;
-                }, {
-                        _007d_price: item.price,
-                        _030d_price: item.price,
-                        _365d_price: item.price,
-                    });
-
+            updateStatistics(item, (lowPrices) => {
                 result.message += `[가격 변동]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${found.lowestPrice} => ${item.lowestPrice}\n주최저가: ${lowPrices._007d_price}\n월최저가: ${lowPrices._030d_price}\n년최저가: ${lowPrices._365d_price}\n\n`;
-
-                var putParams = {
-                    TableName: 'webdata',
-                    Item: {
-                        site: productId,
-                        timestamp: 0,
-                        ttl: now + 30 * 24 * 60 * 60,
-                        data: data
-                    }
-                };
-
-                console.log("Updating Statistics");
-                docClient.put(putParams, (err, res) => {
-                    if (!err) {
-                        console.log(JSON.stringify(res));
-                    }
-                    callback(null);
-                });
+                callback(null);
             });
-
         } else {
             callback(null);
         }
