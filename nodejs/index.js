@@ -3,7 +3,6 @@ const config = require('config');
 const cheerio = require('cheerio');
 const async = require('async');
 const AWS = require('aws-sdk');
-const path = require('path');
 
 AWS.config.update({
     region: 'ap-northeast-2',
@@ -13,7 +12,7 @@ AWS.config.update({
 //const dynamodb = new AWS.DynamoDB();
 const docClient = new AWS.DynamoDB.DocumentClient();
 
-var now = Math.floor(Date.now() / 1000);
+var now;
 
 var req = request.defaults({
     headers: {
@@ -107,8 +106,7 @@ var parseItem = function (item, callback) {
                 eval(matches[1]);
 
                 item.couponList = aCouponList.map((value, index, array) => {
-                    var timestamp = now;
-                    if (value.publish_start_time < timestamp && timestamp <= value.publish_end_time && value.usable_time < timestamp && timestamp <= value.expire_time) {
+                    if (value.publish_start_time < now && now <= value.publish_end_time && value.usable_time < now && now <= value.expire_time) {
                         return {
                             coupon_value: value.coupon_value,
                             max_discount_price: value.max_discount_price,
@@ -145,7 +143,6 @@ var parseItem = function (item, callback) {
 };
 
 var getProductId = function (item) {
-    //return `wemakeprice-${path.basename(item.url)}`;
     if (item.title.indexOf("컬쳐랜드") > -1) {
         return "컬쳐랜드";
     }
@@ -333,6 +330,7 @@ var saveReport = function (result, callback) {
 };
 
 var notifyReport = function (result, callback) {
+    console.log("Notify Report");
     if (result.message.length > 0) {
         var telegramConfig = config.get('telegram');
         var option = {
@@ -359,6 +357,7 @@ var notifyReport = function (result, callback) {
 };
 
 exports.handler = function (event, context, callback) {
+    now = Math.floor(Date.now() / 1000);
     async.waterfall([
         start,
         requestListPage,
