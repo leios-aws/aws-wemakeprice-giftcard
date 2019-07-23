@@ -161,6 +161,8 @@ var getProductId = function (item) {
     if (item.title.indexOf("신세계") > -1) {
         return "신세계";
     }
+    
+    return "";
 };
 
 var updateStatistics = function (item, callback) {
