@@ -236,7 +236,7 @@ var updateStatistics = function (item, callback) {
         console.log("Updating Statistics");
         docClient.put(putParams, (err, res) => {
             if (!err) {
-                console.log(JSON.stringify(res));
+                console.log(JSON.stringify(data));
             }
             callback(lowPrices);
         });
@@ -246,7 +246,6 @@ var updateStatistics = function (item, callback) {
 var processItem = function (result, saved, item, callback) {
     console.log(`Checking item ${item.title} : ${item.url}`);
 
-    var productId = getProductId(item);
     var found = saved.items.reduce((f, curr) => {
         if (f) {
             return f;
