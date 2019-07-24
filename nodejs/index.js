@@ -80,7 +80,12 @@ var requestListPage = function (result, callback) {
                 if (item.price > 101000) {
                     return null;
                 }
+                // 판매 종료
                 if (body.html.indexOf('btn_buy_end') > -1) {
+                    return null;
+                }
+                // 매진
+                if (body.html.indexOf('btn_soldout2') > -1) {
                     return null;
                 }
                 return item;
@@ -158,7 +163,7 @@ var getProductId = function (item) {
     if (item.title.indexOf("신세계") > -1) {
         return "신세계";
     }
-    
+
     return "";
 };
 
