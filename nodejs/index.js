@@ -259,7 +259,7 @@ var processItem = function (result, saved, item, callback) {
     if (!found) {
         console.log(`New item ${item.title}`);
         updateStatistics(item, (lowPrices) => {
-            result.message += `[신규 상품 등록]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n\n`;
+            result.message += `[신규 상품 등록]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n주최저가: ${lowPrices._007d_price}\n월최저가: ${lowPrices._030d_price}\n년최저가: ${lowPrices._365d_price}\n\n`;
             callback(null);
         });
     } else {
