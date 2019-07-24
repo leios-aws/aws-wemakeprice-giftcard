@@ -249,7 +249,7 @@ var updateStatistics = function (item, callback) {
 };
 
 var processItem = function (result, saved, item, callback) {
-    console.log(`Checking item ${item.title} : ${item.url}`);
+    console.log(`Checking new item ${item.title} : ${item.url}`);
 
     var found = saved.items.reduce((f, curr) => {
         if (f) {
@@ -278,7 +278,6 @@ var processItem = function (result, saved, item, callback) {
             callback(null);
         }
     }
-
 };
 
 var makeReport = function (result, callback) {
@@ -302,9 +301,37 @@ var makeReport = function (result, callback) {
             if (res.Items.length > 0 && res.Items[0].data) {
                 saved = res.Items[0].data;
             }
-            async.eachSeries(result.data.items, (item, inner_callback) => {
-                processItem(result, saved, item, inner_callback);
-            }, function (err) {
+            async.parallel([
+                function (callback) {
+                    async.each(saved.items, (item, callback) => {
+                        console.log(`Checking old item ${item.title} : ${item.url}`);
+                        var found = result.data.items.reduce((f, curr) => {
+                            if (f) {
+                                return f;
+                            } else {
+                                if (curr.url === item.url) {
+                                    return curr;
+                                }
+                            }
+                        }, null);
+
+                        if (!found) {
+                            console.log(`Soldout item ${item.title}`);
+                            result.message += `[판매 중지]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n\n`;
+                        }
+                        callback(null);
+                    }, function (err) {
+                        callback(err);
+                    });
+                },
+                function (callback) {
+                    async.eachSeries(result.data.items, (item, callback) => {
+                        processItem(result, saved, item, callback);
+                    }, function (err) {
+                        callback(err);
+                    });
+                },
+            ], function (err) {
                 callback(err, result);
             });
         } else {
