@@ -1,6 +1,6 @@
 {
   "name": "aws-wemakeprice",
-  "version": "19.0.0",
+  "version": "20.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
