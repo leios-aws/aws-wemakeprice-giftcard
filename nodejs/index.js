@@ -147,24 +147,21 @@ var parseItem = function (item, callback) {
     });
 };
 
-var getProductId = function (item) {
-    if (item.title.indexOf("컬쳐랜드") > -1) {
-        return "컬쳐랜드";
-    }
-    if (item.title.indexOf("해피머니") > -1) {
-        return "해피머니";
-    }
-    if (item.title.indexOf("도서문화상품권") > -1) {
-        return "도서문화상품권";
-    }
-    if (item.title.indexOf("롯데") > -1) {
-        return "롯데";
-    }
-    if (item.title.indexOf("신세계") > -1) {
-        return "신세계";
-    }
+var traceProducts = [
+    "컬쳐랜드",
+    "해피머니",
+    "도서문화상품권",
+    "롯데",
+    "신세계",
+];
 
-    return "";
+var getProductId = function (item) {
+    for (var i = 0; i < traceProducts.length; i++) {
+        if (item.title.indexOf(traceProducts[i]) > -1) {
+            return traceProducts[i];
+        }
+    }
+    return null;
 };
 
 var updateStatistics = function (item, callback) {
@@ -175,7 +172,7 @@ var updateStatistics = function (item, callback) {
         _365d_price: item.price,
     };
 
-    if (productId.length === 0) {
+    if (!productId) {
         callback(lowPrices);
         return;
     }
@@ -387,8 +384,13 @@ var notifyReport = function (result, callback) {
     }
 };
 
+
+// http://www.11st.co.kr/category/DisplayCategory.tmall?method=getDisplayCategory3Depth&dispCtgrNo=1017940#fromPricetoPrice%%90000%%100000%%undefined$$sortCd%%L$$pageNum%%1
+// http://www.11st.co.kr/category/DisplayCategory.tmall?method=getSearchFilterAjax&filterSearch=Y&pageLoadType=ajax&selectedFilterYn=Y&version=1.2&prdImgQuality=&prdImgScale=&sellerNos=&dispCtgrType=&pageNo=1&benefits=&brandCd=&brandNm=&attributes=&verticalType=ALL&fromPrice=90000&toPrice=100000&reSearchYN=N&method=getDisplayCategory2Depth&dispCtgrLevel=3&dispCtgrNo=1017940&lCtgrNo=117025&mCtgrNo=1017936&sCtgrNo=1017940&dCtgrNo=0&isAddDispCtgr=false&attrYearNavi=&sortCd=L&pageSize=40&viewType=L&totalCount=34&pageNum=1&researchFlag=false&kwd=&excptKwd=&minPrice=90000&maxPrice=100000&stPrice=&kwd2=&prevKwd2=&kwdExcept=&clearAll=&kwdInCondition=&exceptKwdInCondition=&myPrdViewYN=Y&previousKwd=&previousExcptKwd=&isPremiumItem=&xzone=&partnerSellerNos=&partnerFilterYN=&dealPrdYN=N&brdParam=&catalogYN=N&ajaxYn=Y&engineRequestUrl=
+
 exports.handler = function (event, context, callback) {
     now = Math.floor(Date.now() / 1000);
+
     async.waterfall([
         start,
         requestListPage,
@@ -407,6 +409,6 @@ exports.handler = function (event, context, callback) {
     });
 
     if (callback) {
-        callback(null, 'Success');
+        callback(null);
     }
 };
