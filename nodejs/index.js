@@ -194,7 +194,22 @@ var updateStatistics = function (item, callback) {
                 data = res.Item.data;
             }
         }
-        data.push({ ts: now, price: item.lowestPrice });
+        var found = data.reduce((f, curr, index) => {
+            if (f) {
+                return f;
+            } else {
+                if (curr.ts === now) {
+                    if (item.lowestPrice < curr.price) {
+                        data[index].price = item.lowestPrice;
+                    }
+                    return curr;
+                }
+            }
+        }, null);
+
+        if (!found) {
+            data.push({ ts: now, price: item.lowestPrice });
+        }
 
         lowPrices = data.reduce((prev, curr) => {
             // 7일 이내 데이터이면
