@@ -194,24 +194,25 @@ var updateStatistics = function (item, callback) {
                 data = res.Item.data;
             }
         }
-        var found = data.reduce((f, curr, index) => {
-            if (f) {
-                return f;
-            } else {
-                if (curr.ts === now) {
-                    if (item.lowestPrice < curr.price) {
-                        data[index].price = item.lowestPrice;
-                    }
-                    return curr;
+
+        data.push({ ts: now, price: item.lowestPrice });
+
+        var unique_data = [];
+
+        for (var i = 0; i < data.length; i++) {
+            var found = false;
+            for (var j = 0; j < unique_data.length; j++) {
+                if (unique_data[j].ts == data[i].ts) {
+                    found = true;
+                    unique_data[j].price = data[i].price;
                 }
             }
-        }, null);
-
-        if (!found) {
-            data.push({ ts: now, price: item.lowestPrice });
+            if (!found) {
+                unique_data.push(data[i]);
+            }
         }
 
-        lowPrices = data.reduce((prev, curr) => {
+        lowPrices = unique_data.reduce((prev, curr) => {
             // 7일 이내 데이터이면
             if (now < curr.ts + 7 * 24 * 60 * 60) {
                 if (curr.price < prev._007d_price) {
@@ -233,7 +234,7 @@ var updateStatistics = function (item, callback) {
             return prev;
         }, lowPrices);
 
-        data = data.map((d) => {
+        unique_data = unique_data.map((d) => {
             // 1년 이내 데이터이면
             if (now < d.ts + 365 * 24 * 60 * 60) {
                 return d;
@@ -246,14 +247,14 @@ var updateStatistics = function (item, callback) {
                 site: productId,
                 timestamp: 0,
                 ttl: now + 30 * 24 * 60 * 60,
-                data: data
+                data: unique_data
             }
         };
 
         console.log("Updating Statistics");
         docClient.put(putParams, (err, res) => {
             if (!err) {
-                console.log(JSON.stringify(data));
+                console.log(err);
             }
             callback(lowPrices);
         });
