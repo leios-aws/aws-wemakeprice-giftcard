@@ -147,24 +147,21 @@ var parseItem = function (item, callback) {
     });
 };
 
-var getProductId = function (item) {
-    if (item.title.indexOf("컬쳐랜드") > -1) {
-        return "컬쳐랜드";
-    }
-    if (item.title.indexOf("해피머니") > -1) {
-        return "해피머니";
-    }
-    if (item.title.indexOf("도서문화상품권") > -1) {
-        return "도서문화상품권";
-    }
-    if (item.title.indexOf("롯데") > -1) {
-        return "롯데";
-    }
-    if (item.title.indexOf("신세계") > -1) {
-        return "신세계";
-    }
+var traceProducts = [
+    "컬쳐랜드",
+    "해피머니",
+    "도서문화상품권",
+    "롯데",
+    "신세계",
+];
 
-    return "";
+var getProductId = function (item) {
+    for (var i = 0; i < traceProducts.length; i++) {
+        if (item.title.indexOf(traceProducts[i]) > -1) {
+            return traceProducts[i];
+        }
+    }
+    return null;
 };
 
 var updateStatistics = function (item, callback) {
@@ -175,7 +172,7 @@ var updateStatistics = function (item, callback) {
         _365d_price: item.price,
     };
 
-    if (productId.length === 0) {
+    if (!productId) {
         callback(lowPrices);
         return;
     }
@@ -197,9 +194,25 @@ var updateStatistics = function (item, callback) {
                 data = res.Item.data;
             }
         }
+
         data.push({ ts: now, price: item.lowestPrice });
 
-        lowPrices = data.reduce((prev, curr) => {
+        var unique_data = [];
+
+        for (var i = 0; i < data.length; i++) {
+            var found = false;
+            for (var j = 0; j < unique_data.length; j++) {
+                if (unique_data[j].ts == data[i].ts) {
+                    found = true;
+                    unique_data[j].price = data[i].price;
+                }
+            }
+            if (!found) {
+                unique_data.push(data[i]);
+            }
+        }
+
+        lowPrices = unique_data.reduce((prev, curr) => {
             // 7일 이내 데이터이면
             if (now < curr.ts + 7 * 24 * 60 * 60) {
                 if (curr.price < prev._007d_price) {
@@ -221,7 +234,7 @@ var updateStatistics = function (item, callback) {
             return prev;
         }, lowPrices);
 
-        data = data.map((d) => {
+        unique_data = unique_data.map((d) => {
             // 1년 이내 데이터이면
             if (now < d.ts + 365 * 24 * 60 * 60) {
                 return d;
@@ -234,14 +247,14 @@ var updateStatistics = function (item, callback) {
                 site: productId,
                 timestamp: 0,
                 ttl: now + 30 * 24 * 60 * 60,
-                data: data
+                data: unique_data
             }
         };
 
         console.log("Updating Statistics");
         docClient.put(putParams, (err, res) => {
             if (!err) {
-                console.log(JSON.stringify(data));
+                console.log(err);
             }
             callback(lowPrices);
         });
@@ -387,8 +400,13 @@ var notifyReport = function (result, callback) {
     }
 };
 
+
+// http://www.11st.co.kr/category/DisplayCategory.tmall?method=getDisplayCategory3Depth&dispCtgrNo=1017940#fromPricetoPrice%%90000%%100000%%undefined$$sortCd%%L$$pageNum%%1
+// http://www.11st.co.kr/category/DisplayCategory.tmall?method=getSearchFilterAjax&filterSearch=Y&pageLoadType=ajax&selectedFilterYn=Y&version=1.2&prdImgQuality=&prdImgScale=&sellerNos=&dispCtgrType=&pageNo=1&benefits=&brandCd=&brandNm=&attributes=&verticalType=ALL&fromPrice=90000&toPrice=100000&reSearchYN=N&method=getDisplayCategory2Depth&dispCtgrLevel=3&dispCtgrNo=1017940&lCtgrNo=117025&mCtgrNo=1017936&sCtgrNo=1017940&dCtgrNo=0&isAddDispCtgr=false&attrYearNavi=&sortCd=L&pageSize=40&viewType=L&totalCount=34&pageNum=1&researchFlag=false&kwd=&excptKwd=&minPrice=90000&maxPrice=100000&stPrice=&kwd2=&prevKwd2=&kwdExcept=&clearAll=&kwdInCondition=&exceptKwdInCondition=&myPrdViewYN=Y&previousKwd=&previousExcptKwd=&isPremiumItem=&xzone=&partnerSellerNos=&partnerFilterYN=&dealPrdYN=N&brdParam=&catalogYN=N&ajaxYn=Y&engineRequestUrl=
+
 exports.handler = function (event, context, callback) {
     now = Math.floor(Date.now() / 1000);
+
     async.waterfall([
         start,
         requestListPage,
@@ -407,6 +425,6 @@ exports.handler = function (event, context, callback) {
     });
 
     if (callback) {
-        callback(null, 'Success');
+        callback(null);
     }
 };
