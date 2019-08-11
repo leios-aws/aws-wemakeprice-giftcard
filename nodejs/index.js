@@ -164,7 +164,7 @@ var getProductId = function (item) {
     return null;
 };
 
-var updateStatistics = function (item, callback) {
+var updateStatistics = function (item, lowestPrice, callback) {
     var productId = getProductId(item);
     var lowPrices = {
         _007d_price: item.price,
@@ -195,7 +195,7 @@ var updateStatistics = function (item, callback) {
             }
         }
 
-        data.push({ ts: now, price: item.lowestPrice });
+        data.push({ ts: now, price: lowestPrice });
 
         var unique_data = [];
 
@@ -262,7 +262,7 @@ var updateStatistics = function (item, callback) {
 };
 
 var processItem = function (result, saved, item, callback) {
-    console.log(`Checking new item ${item.title} : ${item.url}`);
+    console.log(`신규 상품 확인 ${item.title} : ${item.url}, ${item.lowestPrice}`);
 
     var found = saved.items.reduce((f, curr) => {
         if (f) {
@@ -276,14 +276,15 @@ var processItem = function (result, saved, item, callback) {
 
     if (!found) {
         console.log(`New item ${item.title}`);
-        updateStatistics(item, (lowPrices) => {
+        updateStatistics(item, item.lowestPrice, (lowPrices) => {
             result.message += `[신규 상품 등록]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n주최저가: ${lowPrices._007d_price}\n월최저가: ${lowPrices._030d_price}\n년최저가: ${lowPrices._365d_price}\n\n`;
             callback(null);
         });
     } else {
+        console.log(`기존 최저가: ${found.lowestPrice}, 신규 최저가: ${item.lowestPrice}`);
         if (item.lowestPrice !== found.lowestPrice) {
             console.log(`New lowest price ${item.title} => ${item.lowestPrice}`);
-            updateStatistics(item, (lowPrices) => {
+            updateStatistics(item, item.lowestPrice, (lowPrices) => {
                 result.message += `[가격 변동]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${found.lowestPrice} => ${item.lowestPrice}\n주최저가: ${lowPrices._007d_price}\n월최저가: ${lowPrices._030d_price}\n년최저가: ${lowPrices._365d_price}\n\n`;
                 callback(null);
             });
@@ -314,10 +315,10 @@ var makeReport = function (result, callback) {
             if (res.Items.length > 0 && res.Items[0].data) {
                 saved = res.Items[0].data;
             }
-            async.parallel([
+            async.series([
                 function (callback) {
                     async.each(saved.items, (item, callback) => {
-                        console.log(`Checking old item ${item.title} : ${item.url}`);
+                        console.log(`기존 상품 확인: ${item.title} : ${item.url} ${item.lowestPrice}`);
                         var found = result.data.items.reduce((f, curr) => {
                             if (f) {
                                 return f;
@@ -330,9 +331,13 @@ var makeReport = function (result, callback) {
 
                         if (!found) {
                             console.log(`Soldout item ${item.title}`);
-                            result.message += `[판매 중지]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n\n`;
+                            updateStatistics(item, item.price, (lowPrices) => {
+                                result.message += `[판매 중지]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n\n`;
+                                callback(null);
+                            });
+                        } else {
+                            callback(null);
                         }
-                        callback(null);
                     }, function (err) {
                         callback(err);
                     });
