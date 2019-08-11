@@ -155,6 +155,9 @@ var traceProducts = [
     "신세계",
 ];
 
+var lowestPrices;
+var statistics;
+
 var getProductId = function (item) {
     for (var i = 0; i < traceProducts.length; i++) {
         if (item.title.indexOf(traceProducts[i]) > -1) {
@@ -164,9 +167,11 @@ var getProductId = function (item) {
     return null;
 };
 
-var updateStatistics = function (item, lowestPrice, callback) {
+var getStatistics = function (item, callback) {
     var productId = getProductId(item);
     var lowPrices = {
+        _lowest_item: item,
+        _latest_price: item.price,
         _007d_price: item.price,
         _030d_price: item.price,
         _365d_price: item.price,
@@ -174,6 +179,14 @@ var updateStatistics = function (item, lowestPrice, callback) {
 
     if (!productId) {
         callback(lowPrices);
+        return;
+    }
+
+    if (statistics[productId] && statistics[productId].lowPrices) {
+        if (item.lowestPrice < statistics[productId].lowPrices._lowest_item.lowestPrice) {
+            statistics[productId].lowPrices._lowest_item = item;
+        }
+        callback(statistics[productId].lowPrices);
         return;
     }
 
@@ -189,7 +202,58 @@ var updateStatistics = function (item, lowestPrice, callback) {
     docClient.get(getParams, (err, res) => {
         var data = [];
         if (!err) {
-            console.log(JSON.stringify(res));
+            //console.log(JSON.stringify(res));
+            if (res && res.Item && res.Item.data) {
+                data = res.Item.data;
+            }
+        }
+
+        statistics[productId] = {};
+
+        if (data.length > 0) {
+            lowPrices._latest_price = data[data.length - 1].price;
+        }
+
+        lowPrices = data.reduce((prev, curr) => {
+            // 7일 이내 데이터이면
+            if (now < curr.ts + 7 * 24 * 60 * 60) {
+                if (curr.price < prev._007d_price) {
+                    prev._007d_price = curr.price;
+                }
+            }
+            // 30일 이내 데이터이면
+            if (now < curr.ts + 30 * 24 * 60 * 60) {
+                if (curr.price < prev._030d_price) {
+                    prev._030d_price = curr.price;
+                }
+            }
+            // 1년 이내 데이터이면
+            if (now < curr.ts + 365 * 24 * 60 * 60) {
+                if (curr.price < prev._365d_price) {
+                    prev._365d_price = curr.price;
+                }
+            }
+            return prev;
+        }, lowPrices);
+        statistics[productId].lowPrices = lowPrices;
+        callback(lowPrices);
+    });
+};
+
+var updateStatistics = function (productId, lowestPrice, callback) {
+    var getParams = {
+        TableName: 'webdata',
+        Key: {
+            site: productId,
+            timestamp: 0,
+        }
+    };
+
+    console.log(`Get Statistics for ${productId}`);
+    docClient.get(getParams, (err, res) => {
+        var data = [];
+        if (!err) {
+            //console.log(JSON.stringify(res));
             if (res && res.Item && res.Item.data) {
                 data = res.Item.data;
             }
@@ -211,28 +275,6 @@ var updateStatistics = function (item, lowestPrice, callback) {
                 unique_data.push(data[i]);
             }
         }
-
-        lowPrices = unique_data.reduce((prev, curr) => {
-            // 7일 이내 데이터이면
-            if (now < curr.ts + 7 * 24 * 60 * 60) {
-                if (curr.price < prev._007d_price) {
-                    prev._007d_price = curr.price;
-                }
-            }
-            // 30일 이내 데이터이면
-            if (now < curr.ts + 30 * 24 * 60 * 60) {
-                if (curr.price < prev._030d_price) {
-                    prev._030d_price = curr.price;
-                }
-            }
-            // 1년 이내 데이터이면
-            if (now < curr.ts + 365 * 24 * 60 * 60) {
-                if (curr.price < prev._365d_price) {
-                    prev._365d_price = curr.price;
-                }
-            }
-            return prev;
-        }, lowPrices);
 
         unique_data = unique_data.map((d) => {
             // 1년 이내 데이터이면
@@ -256,7 +298,9 @@ var updateStatistics = function (item, lowestPrice, callback) {
             if (!err) {
                 console.log(err);
             }
-            callback(lowPrices);
+            if (callback) {
+                callback(null);
+            }
         });
     });
 };
@@ -274,24 +318,19 @@ var processItem = function (result, saved, item, callback) {
         }
     }, null);
 
-    if (!found) {
-        console.log(`New item ${item.title}`);
-        updateStatistics(item, item.lowestPrice, (lowPrices) => {
+    getStatistics(item, (lowPrices) => {
+        if (!found) {
+            console.log(`New item ${item.title}`);
             result.message += `[신규 상품 등록]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n주최저가: ${lowPrices._007d_price}\n월최저가: ${lowPrices._030d_price}\n년최저가: ${lowPrices._365d_price}\n\n`;
-            callback(null);
-        });
-    } else {
-        console.log(`기존 최저가: ${found.lowestPrice}, 신규 최저가: ${item.lowestPrice}`);
-        if (item.lowestPrice !== found.lowestPrice) {
-            console.log(`New lowest price ${item.title} => ${item.lowestPrice}`);
-            updateStatistics(item, item.lowestPrice, (lowPrices) => {
-                result.message += `[가격 변동]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${found.lowestPrice} => ${item.lowestPrice}\n주최저가: ${lowPrices._007d_price}\n월최저가: ${lowPrices._030d_price}\n년최저가: ${lowPrices._365d_price}\n\n`;
-                callback(null);
-            });
         } else {
-            callback(null);
+            console.log(`기존 최저가: ${found.lowestPrice}, 신규 최저가: ${item.lowestPrice}`);
+            if (item.lowestPrice !== found.lowestPrice) {
+                console.log(`New lowest price ${item.title} => ${item.lowestPrice}`);
+                result.message += `[가격 변동]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${found.lowestPrice} => ${item.lowestPrice}\n주최저가: ${lowPrices._007d_price}\n월최저가: ${lowPrices._030d_price}\n년최저가: ${lowPrices._365d_price}\n\n`;
+            }
         }
-    }
+        callback(null);
+    });
 };
 
 var makeReport = function (result, callback) {
@@ -331,13 +370,9 @@ var makeReport = function (result, callback) {
 
                         if (!found) {
                             console.log(`Soldout item ${item.title}`);
-                            updateStatistics(item, item.price, (lowPrices) => {
-                                result.message += `[판매 중지]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n\n`;
-                                callback(null);
-                            });
-                        } else {
-                            callback(null);
+                            result.message += `[판매 중지]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n\n`;
                         }
+                        callback(null);
                     }, function (err) {
                         callback(err);
                     });
@@ -350,6 +385,14 @@ var makeReport = function (result, callback) {
                     });
                 },
             ], function (err) {
+                if (!err) {
+                    for (var productId in statistics) {
+                        if (statistics[productId].lowPrices._lowest_item.lowestPrice !== statistics[productId].lowPrices._latest_price) {
+                            console.log(`Update statistics ${productId} ${statistics[productId].lowPrices._latest_price} => ${statistics[productId].lowPrices._lowest_item.lowestPrice}`);
+                            updateStatistics(productId, statistics[productId].lowPrices._lowest_item.lowestPrice);
+                        }
+                    }
+                }
                 callback(err, result);
             });
         } else {
@@ -411,6 +454,8 @@ var notifyReport = function (result, callback) {
 
 exports.handler = function (event, context, callback) {
     now = Math.floor(Date.now() / 1000);
+    lowestPrices = {};
+    statistics = {};
 
     async.waterfall([
         start,
