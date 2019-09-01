@@ -321,12 +321,23 @@ var processItem = function (result, saved, item, callback) {
     getStatistics(item, (lowPrices) => {
         if (!found) {
             console.log(`New item ${item.title}`);
-            result.message += `[신규 상품 등록]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n주최저가: ${lowPrices._007d_price}\n월최저가: ${lowPrices._030d_price}\n년최저가: ${lowPrices._365d_price}\n\n`;
+            result.message += `[신규 상품 등록]\n`;
+            result.message += `품명: ${item.title}\n`;
+            result.message += `가격: ${item.price}\n`;
+            result.message += `최저가: ${item.lowestPrice}\n주최저가: ${lowPrices._007d_price}\n월최저가: ${lowPrices._030d_price}\n년최저가: ${lowPrices._365d_price}\n`;
+            result.message += `URL: ${item.url}\n`
+            result.message += `\n`;
         } else {
             console.log(`기존 최저가: ${found.lowestPrice}, 신규 최저가: ${item.lowestPrice}`);
             if (item.lowestPrice !== found.lowestPrice) {
                 console.log(`New lowest price ${item.title} => ${item.lowestPrice}`);
-                result.message += `[가격 변동]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${found.lowestPrice} => ${item.lowestPrice}\n주최저가: ${lowPrices._007d_price}\n월최저가: ${lowPrices._030d_price}\n년최저가: ${lowPrices._365d_price}\n\n`;
+                result.message += `[가격 변동]\n`;
+                result.message += `품명: ${item.title}\n`;
+                result.message += `가격: ${item.price}\n`
+                result.message += `최저가: ${found.lowestPrice} => ${item.lowestPrice}\n`
+                result.message += `주최저가: ${lowPrices._007d_price}\n월최저가: ${lowPrices._030d_price}\n년최저가: ${lowPrices._365d_price}\n`;
+                result.message += `URL: ${item.url}\n`;
+                result.message += `\n`;
             }
         }
         callback(null);
@@ -370,7 +381,12 @@ var makeReport = function (result, callback) {
 
                         if (!found) {
                             console.log(`Soldout item ${item.title}`);
-                            result.message += `[판매 중지]\n품명: ${item.title}\nURL: ${item.url}\n가격: ${item.price}\n최저가: ${item.lowestPrice}\n\n`;
+                            result.message += `[판매 중지]\n`;
+                            result.message += `품명: ${item.title}\n`;
+                            result.message += `가격: ${item.price}\n`;
+                            result.message += `최저가: ${item.lowestPrice}\n`;
+                            result.message += `URL: ${item.url}\n`;
+                            result.message += `\n`;
                         }
                         callback(null);
                     }, function (err) {
