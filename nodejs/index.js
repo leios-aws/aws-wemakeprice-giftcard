@@ -36,8 +36,93 @@ var start = function (callback) {
         data: {
             items: [],
         },
+        naver_link: "https://front.wemakeprice.com/affiliate/bridge?channelId=1000020&prodNo=138595957",
+        naver_bridge: "",
         message: "",
         loggedIn: false,
+    });
+};
+
+var requestNaverShoppingSearch = function (result, callback) {
+    var option = {
+        //uri: 'http://www.wemakeprice.com/main/103900/103912',
+        uri: 'https://search.shopping.naver.com/search/all.nhn?query=위메프&pagingSize=80',
+        method: 'GET',
+        json: true,
+        qs: {
+        }
+    };
+
+    req(option, function (err, response, body) {
+        result.response = response;
+        result.body = body;
+
+        if (!err) {
+            var $ = cheerio.load(body);
+
+            result.naver_link = $('._itemSection').get().reduce(function(prev, curr) {
+                if (prev) {
+                    return prev;
+                }
+
+                var el = $('div.info_mall > p > a.btn_detail._btn_mall_detail', curr);
+                if (el) {
+                    var data = el.data();
+                    if (data && data.mallName && data.mallName === '위메프') {
+                        return $('div.info > a', curr).attr('href');
+                    }
+                }
+
+                return null;
+            }, null);
+        }
+
+        //#_search_list > div.search_list.basis > ul
+        callback(err, result);
+    });
+};
+
+var requestNaverShoppingBridge = function (result, callback) {
+    var option = {
+        //uri: 'http://www.wemakeprice.com/main/103900/103912',
+        uri: result.naver_link,
+        method: 'GET',
+        json: true,
+        qs: {
+        },
+        header: {
+            'Referer': 'https://search.shopping.naver.com/search/all.nhn?query=위메프&pagingSize=80'
+        }
+    };
+
+    req(option, function (err, response, body) {
+        result.response = response;
+        result.body = body;
+
+        callback(err, result);
+    });
+};
+
+var requestNaverShoppingWemakeprice = function (result, callback) {
+    var option = {
+        //uri: 'http://www.wemakeprice.com/main/103900/103912',
+        uri: result.naver_link.replace('adcrNoti', 'adcr'),
+        method: 'GET',
+        json: true,
+        qs: {
+        },
+        header: {
+            'Referer': result.naver_link
+        }
+    };
+
+    req(option, function (err, response, body) {
+        result.response = response;
+        result.body = body;
+
+        result.naver_bridge = result.response.request.uri.search;
+
+        callback(err, result);
     });
 };
 
@@ -71,6 +156,7 @@ var requestListPage = function (result, callback) {
                         item.url = 'http://www.wemakeprice.com' + href;
                     }
                 }
+                item.bridge = result.naver_bridge;
                 item.price = parseInt($("span.type03 > a > span.box_desc > span.txt_info > span.price > span.sale", element).text().replace(/,/g, ''), 10);
                 item.title = $("span.type03 > a > span.box_desc > strong.tit_desc", element).text();
 
@@ -98,7 +184,7 @@ var requestListPage = function (result, callback) {
 
 var parseItem = function (item, callback) {
     var option = {
-        uri: item.url,
+        uri: item.url + item.bridge,
         method: 'GET',
         qs: {
         }
@@ -107,6 +193,7 @@ var parseItem = function (item, callback) {
     req(option, function (err, response, body) {
         if (!err) {
             var matches = body.match(/(var aCouponList = .*)/);
+            console.log(item.url, matches[1]);
             if (matches && matches.length > 1) {
                 eval(matches[1]);
 
@@ -132,7 +219,7 @@ var parseItem = function (item, callback) {
         item.lowestPrice = item.couponList.reduce((prev, curr) => {
             var curr_price = item.price;
             for (var i = 0; i < 20; i++) {
-                if (curr.min_payment_amount < (item.price * i)) {
+                if (curr.min_payment_amount <= (item.price * i)) {
                     curr_price = Math.floor(((item.price * i) - curr.coupon_value) / i);
                     break;
                 }
@@ -171,7 +258,7 @@ var getStatistics = function (item, callback) {
     var productId = getProductId(item);
     var lowPrices = {
         _lowest_item: item,
-        _latest_price: item.price,
+        _latest_data: {price: item.price, ts: 0},
         _007d_price: item.price,
         _030d_price: item.price,
         _365d_price: item.price,
@@ -210,10 +297,6 @@ var getStatistics = function (item, callback) {
 
         statistics[productId] = {};
 
-        if (data.length > 0) {
-            lowPrices._latest_price = data[data.length - 1].price;
-        }
-
         lowPrices = data.reduce((prev, curr) => {
             // 7일 이내 데이터이면
             if (now < curr.ts + 7 * 24 * 60 * 60) {
@@ -232,6 +315,10 @@ var getStatistics = function (item, callback) {
                 if (curr.price < prev._365d_price) {
                     prev._365d_price = curr.price;
                 }
+            }
+
+            if (prev._latest_data.ts < curr.ts) {
+                prev._latest_data = curr;
             }
             return prev;
         }, lowPrices);
@@ -298,6 +385,7 @@ var updateStatistics = function (productId, lowestPrice, callback) {
             if (!err) {
                 console.log(err);
             }
+            console.log("Statistics updated");
             if (callback) {
                 callback(null);
             }
@@ -319,6 +407,7 @@ var processItem = function (result, saved, item, callback) {
     }, null);
 
     getStatistics(item, (lowPrices) => {
+        //console.log(lowPrices);
         if (!found) {
             console.log(`New item ${item.title}`);
             result.message += `[신규 상품 등록]\n`;
@@ -328,7 +417,7 @@ var processItem = function (result, saved, item, callback) {
             result.message += `URL: ${item.url}\n`
             result.message += `\n`;
         } else {
-            console.log(`기존 최저가: ${found.lowestPrice}, 신규 최저가: ${item.lowestPrice}`);
+            console.log(`통계 최저가: ${lowPrices._latest_data.price}, 최저가 변동: ${found.lowestPrice} => ${item.lowestPrice}`);
             if (item.lowestPrice !== found.lowestPrice) {
                 console.log(`New lowest price ${item.title} => ${item.lowestPrice}`);
                 result.message += `[가격 변동]\n`;
@@ -403,8 +492,8 @@ var makeReport = function (result, callback) {
             ], function (err) {
                 if (!err) {
                     for (var productId in statistics) {
-                        if (statistics[productId].lowPrices._lowest_item.lowestPrice !== statistics[productId].lowPrices._latest_price) {
-                            console.log(`Update statistics ${productId} ${statistics[productId].lowPrices._latest_price} => ${statistics[productId].lowPrices._lowest_item.lowestPrice}`);
+                        if (statistics[productId].lowPrices._lowest_item.lowestPrice !== statistics[productId].lowPrices._latest_data.price) {
+                            console.log(`Update statistics ${productId} ${statistics[productId].lowPrices._latest_data.price} => ${statistics[productId].lowPrices._lowest_item.lowestPrice}`);
                             updateStatistics(productId, statistics[productId].lowPrices._lowest_item.lowestPrice);
                         }
                     }
@@ -475,6 +564,9 @@ exports.handler = function (event, context, callback) {
 
     async.waterfall([
         start,
+        requestNaverShoppingSearch,
+        requestNaverShoppingBridge,
+        requestNaverShoppingWemakeprice,
         requestListPage,
         function (result, callback) {
             async.eachLimit(result.data.items, 5, parseItem, function (err) {
