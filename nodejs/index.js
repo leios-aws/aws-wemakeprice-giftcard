@@ -193,8 +193,9 @@ var parseItem = function (item, callback) {
     req(option, function (err, response, body) {
         if (!err) {
             var matches = body.match(/(var aCouponList = .*)/);
-            console.log(item.url, matches[1]);
+            item.couponList = [];
             if (matches && matches.length > 1) {
+                console.log(item.url, matches[1]);
                 eval(matches[1]);
 
                 item.couponList = aCouponList.map((value, index, array) => {
@@ -213,7 +214,7 @@ var parseItem = function (item, callback) {
                     }
                 });
             } else {
-                console.log("Pattern not found!");
+                console.log(item.url, "Pattern not found!");
             }
         }
         item.lowestPrice = item.couponList.reduce((prev, curr) => {
