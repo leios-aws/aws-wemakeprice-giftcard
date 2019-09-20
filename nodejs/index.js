@@ -69,7 +69,11 @@ var requestNaverShoppingSearch = function (result, callback) {
                 if (el) {
                     var data = el.data();
                     if (data && data.mallName && data.mallName === '위메프') {
-                        return $('div.info > a', curr).attr('href');
+                        if ($('div.info > div.tit > a', curr).attr('href')) {
+                            return $('div.info > div.tit > a', curr).attr('href');
+                        } else {
+                            return null;
+                        }
                     }
                 }
 
