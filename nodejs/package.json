@@ -1,6 +1,6 @@
 {
   "name": "aws-wemakeprice",
-  "version": "21.0.6",
+  "version": "21.0.7",
   "description": "",
   "main": "index.js",
   "scripts": {
